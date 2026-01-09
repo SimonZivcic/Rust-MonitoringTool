@@ -1,0 +1,11 @@
+[package]
+name = "Monitor-App"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+Monitor-Lib = { version = "0.1.0", path = "../monitor_lib" }
+clap = { version = "4.5.54", features = ["derive"] }
+diesel = { version = "2.3.5", features = ["sqlite"] }
+ratatui = "0.30.0"
+tokio = { version = "1.49.0", features = ["full"] }
