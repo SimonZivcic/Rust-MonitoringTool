@@ -1,45 +1,121 @@
 use ratatui::{
-    style::{Color, Style},
-    widgets::{Block, Borders, Cell, Row, Table},
-    layout::Constraint,
+    layout::{Constraint, Direction, Layout},
+    style::{Color, Modifier, Style},
+    widgets::{Block, Borders, List, ListItem, Paragraph, Row, Table, TableState},
+    Frame,
 };
 use Monitor_Lib::models::Server;
+use chrono::Utc;
+use crate::{ActiveBlock, InfoMode};
 
-pub fn draw_server_table(data: &[(Server, i32, f32, f32)]) -> Table {
-    let header = Row::new(vec![
-        Cell::from("ID"),
-        Cell::from("STAV"),
-        Cell::from("NAZOV"),
-        Cell::from("ODOZVA"),
-        Cell::from("RAM USAGE"),
-        Cell::from("CPU %"),
-    ]).style(Style::default().fg(Color::Yellow)).bottom_margin(1);
+pub fn draw_main_layout(
+    f: &mut Frame,
+    data: &[(Server, i32, f32, f32)],
+    state: &mut TableState,
+    app_state: &crate::AppState,
+) {
+    // Rozdelenie
+    let chunks = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([
+            Constraint::Percentage(67),
+            Constraint::Percentage(30),
+            Constraint::Length(1), 
+        ])
+        .split(f.area());
 
+    let top_chunks = Layout::default()
+        .direction(Direction::Horizontal)
+        .constraints([Constraint::Percentage(70), Constraint::Percentage(30)])
+        .split(chunks[0]);
+
+    let server_style = if app_state.active_block == ActiveBlock::Servers { Style::default().fg(Color::Yellow) } else { Style::default().fg(Color::White) };
+    let info_style = if app_state.active_block == ActiveBlock::Info { Style::default().fg(Color::Yellow) } else { Style::default().fg(Color::White) };
+
+    //NÁPOVEDA V TITULKOCH
+    let server_title = if app_state.active_block == ActiveBlock::Servers {
+        " SERVERY [ENTER] ON/OFF [A] ACTIVATE [R] REMOVE "
+    } else { " SERVERY " };
+
+    let info_title = match app_state.info_mode {
+        InfoMode::DeleteConfirm => " !! ZMAZAŤ? [ENTER] ÁNO [ESC] NIE !! ",
+        InfoMode::ConfirmWarning => " !! CHYBA [ENTER] POKRAČOVAŤ [ESC] SPÄŤ !! ",
+        InfoMode::View if app_state.active_block == ActiveBlock::Info => " INFO [N] NOVÝ [U] UPRAVIŤ ",
+        InfoMode::View => " INFO ",
+        _ if app_state.update_id.is_some() => " UPRAVIŤ [ENTER] ĎALEJ [ESC] ZRUŠIŤ ",
+        _ => " PRIDAŤ [ENTER] ĎALEJ [ESC] ZRUŠIŤ ",
+    };
+
+    //TABUĽKA SERVEROV
     let rows = data.iter().map(|(s, ms, cpu, ram)| {
-        let status_style = match s.status.as_str() {
+        let is_transitioning = s.status == "STARTING" || s.status == "STOPPING";
+        let style = match s.status.as_str() {
             "ON" => Style::default().fg(Color::Green),
             "OFF" => Style::default().fg(Color::Red),
-            _ => Style::default().fg(Color::DarkGray), // Stav "/"
+            "STARTING" | "STOPPING" => Style::default().fg(Color::Yellow).add_modifier(Modifier::ITALIC),
+            _ => Style::default().fg(Color::DarkGray),
         };
 
-        Row::new(vec![
-            Cell::from(s.id.to_string()),
-            Cell::from(s.status.clone()).style(status_style),
-            Cell::from(s.name.clone()),
-            Cell::from(format!("{}ms", ms)),
-            Cell::from(format!("{:.2} / {:.1}GB", ram, s.max_ram)),
-            Cell::from(format!("{:.1}%", cpu)),
-        ])
+        let d_ms = if s.status == "ON" && *ms != -1 && !is_transitioning { format!("{}ms", ms) } else { "0ms".into() };
+        let (d_ram, d_cpu) = if is_transitioning || s.status == "OFF" {
+            ("0.0/0.0G".into(), "0.0%".into())
+        } else {
+            (format!("{:.1}/{:.1}G", ram, s.max_ram), format!("{:.1}%", cpu))
+        };
+
+        Row::new(vec![s.id.to_string(), s.status.clone(), s.name.clone(), d_ms, d_ram, d_cpu]).style(style)
     });
 
-    Table::new(rows, [
-        Constraint::Length(4),
-        Constraint::Length(8),
-        Constraint::Percentage(30),
-        Constraint::Length(10),
-        Constraint::Length(20),
-        Constraint::Length(10),
-    ])
-    .header(header)
-    .block(Block::default().borders(Borders::ALL).title(" MONITORING - Stlac 'q' pre koniec "))
+    let table = Table::new(rows, [Constraint::Length(3), Constraint::Length(9), Constraint::Percentage(30), Constraint::Length(8), Constraint::Length(12), Constraint::Length(8)])
+        .header(Row::new(vec!["ID", "STAV", "NÁZOV", "ODOZVA", "RAM", "CPU %"]).style(Style::default().fg(Color::Yellow)))
+        .block(Block::default().borders(Borders::ALL).title(server_title).border_style(server_style))
+        .row_highlight_style(Style::default().add_modifier(Modifier::REVERSED).fg(Color::Cyan));
+
+    f.render_stateful_widget(table, top_chunks[0], state);
+
+    //INFO PANEL
+    match app_state.info_mode {
+        InfoMode::View => {
+            let mut text = "\n Vyber server...".to_string();
+            if let Some(idx) = state.selected() {
+                if let Some((s, _, _, _)) = data.get(idx) {
+                    let rt = if let Some(st) = app_state.start_times.get(&s.id) {
+                        let d = Utc::now().signed_duration_since(*st);
+                        format!("{}m {}s", d.num_minutes(), d.num_seconds() % 60)
+                    } else { "Offline".into() };
+                    text = format!("\n Port:     {}\n CPU:      {}\n Status:   {}\n\n RUN TIME: {}", s.port, s.cpu_model, s.status, rt);
+                }
+            }
+            f.render_widget(Paragraph::new(text).block(Block::default().borders(Borders::ALL).title(info_title).border_style(info_style)), top_chunks[1]);
+        }
+        InfoMode::DeleteConfirm => {
+            let text = format!("\n Naozaj zmazať:\n {}?", app_state.new_name);
+            f.render_widget(Paragraph::new(text).style(Style::default().fg(Color::Red)).block(Block::default().borders(Borders::ALL).title(info_title).border_style(Style::default().fg(Color::Red))), top_chunks[1]);
+        }
+        _ => {
+            let sel = Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD);
+            let items = vec![
+                ListItem::new(format!(" NÁZOV:  {}", app_state.new_name)).style(if matches!(app_state.info_mode, InfoMode::AddServerName | InfoMode::UpdateServerName) { sel } else { Style::default() }),
+                ListItem::new(format!(" PORT:   {}", app_state.new_port)).style(if matches!(app_state.info_mode, InfoMode::AddServerPort | InfoMode::UpdateServerPort) { sel } else { Style::default() }),
+                ListItem::new(format!(" MAX RAM:{}", app_state.new_ram)).style(if matches!(app_state.info_mode, InfoMode::AddServerRam | InfoMode::UpdateServerRam) { sel } else { Style::default() }),
+                ListItem::new(format!(" CPU:    {}", app_state.new_cpu)).style(if matches!(app_state.info_mode, InfoMode::AddServerCpu | InfoMode::UpdateServerCpu) { sel } else { Style::default() }),
+            ];
+            f.render_widget(List::new(items).block(Block::default().borders(Borders::ALL).title(info_title).border_style(info_style)), top_chunks[1]);
+        }
+    }
+
+    //LOGS
+    let logs: Vec<ListItem> = app_state.logs.iter().rev()
+        .map(|l| {
+            let s = if l.contains("ERROR") { Style::default().fg(Color::Red) }
+                    else if l.contains("STARTING") || l.contains("STOPPING") { Style::default().fg(Color::Cyan) }
+                    else { Style::default() };
+            ListItem::new(l.as_str()).style(s)
+        }).collect();
+    f.render_widget(List::new(logs).block(Block::default().borders(Borders::ALL).title(" LOGY ")), chunks[1]);
+    
+    //NÁPOVEDA
+    let help_menu = Paragraph::new(" q: Exit | Tab: Switch Panel ")
+        .style(Style::default().fg(Color::Gray).bg(Color::Rgb(40, 40, 40)));
+    f.render_widget(help_menu, chunks[2]);
 }

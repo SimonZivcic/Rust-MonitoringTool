@@ -7,8 +7,10 @@ name = "Monitor-App"
 version = "0.1.0"
 dependencies = [
  "Monitor-Lib",
+ "chrono",
  "clap",
  "diesel",
+ "rand 0.9.2",
  "ratatui",
  "tokio",
 ]
