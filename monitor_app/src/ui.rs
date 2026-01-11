@@ -34,25 +34,25 @@ pub fn draw_main_layout(
 
     //NÁPOVEDA V TITULKOCH
     let server_title = if app_state.active_block == ActiveBlock::Servers {
-        " SERVERY [ENTER] ON/OFF [A] ACTIVATE [R] REMOVE "
+        " SERVERY | [ENTER] ON/OFF | [A] Activate | [R] Remove "
     } else { " SERVERY " };
 
     let info_title = match app_state.info_mode {
-        InfoMode::DeleteConfirm => " !! ZMAZAŤ? [ENTER] ÁNO [ESC] NIE !! ",
-        InfoMode::ConfirmWarning => " !! CHYBA [ENTER] POKRAČOVAŤ [ESC] SPÄŤ !! ",
-        InfoMode::View if app_state.active_block == ActiveBlock::Info => " INFO [N] NOVÝ [U] UPRAVIŤ ",
+        InfoMode::DeleteConfirm => " Zmazať? | [ENTER] Áno | [ESC] Nie ",
+        InfoMode::ConfirmWarning => " CHYBA | [ENTER] Pokračovať | [ESC] Späť ",
+        InfoMode::View if app_state.active_block == ActiveBlock::Info => " INFO | [N] Nový | [U] Upraviť ",
         InfoMode::View => " INFO ",
-        _ if app_state.update_id.is_some() => " UPRAVIŤ [ENTER] ĎALEJ [ESC] ZRUŠIŤ ",
-        _ => " PRIDAŤ [ENTER] ĎALEJ [ESC] ZRUŠIŤ ",
+        _ if app_state.update_id.is_some() => " UPRAVIŤ | [ENTER] Ďalej | [ESC] Zrušiť",
+        _ => " PRIDAŤ | [ENTER] Ďalej | [ESC] Zrušiť ",
     };
 
     //TABUĽKA SERVEROV
     let rows = data.iter().map(|(s, ms, cpu, ram)| {
-        let is_transitioning = s.status == "STARTING" || s.status == "STOPPING";
+        let is_transitioning = s.status == "Starting" || s.status == "Stopping";
         let style = match s.status.as_str() {
             "ON" => Style::default().fg(Color::Green),
             "OFF" => Style::default().fg(Color::Red),
-            "STARTING" | "STOPPING" => Style::default().fg(Color::Yellow).add_modifier(Modifier::ITALIC),
+            "Starting" | "Stopping" => Style::default().fg(Color::Yellow).add_modifier(Modifier::ITALIC),
             _ => Style::default().fg(Color::DarkGray),
         };
 
@@ -95,9 +95,9 @@ pub fn draw_main_layout(
         _ => {
             let sel = Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD);
             let items = vec![
-                ListItem::new(format!(" NÁZOV:  {}", app_state.new_name)).style(if matches!(app_state.info_mode, InfoMode::AddServerName | InfoMode::UpdateServerName) { sel } else { Style::default() }),
-                ListItem::new(format!(" PORT:   {}", app_state.new_port)).style(if matches!(app_state.info_mode, InfoMode::AddServerPort | InfoMode::UpdateServerPort) { sel } else { Style::default() }),
-                ListItem::new(format!(" MAX RAM:{}", app_state.new_ram)).style(if matches!(app_state.info_mode, InfoMode::AddServerRam | InfoMode::UpdateServerRam) { sel } else { Style::default() }),
+                ListItem::new(format!(" Názov:  {}", app_state.new_name)).style(if matches!(app_state.info_mode, InfoMode::AddServerName | InfoMode::UpdateServerName) { sel } else { Style::default() }),
+                ListItem::new(format!(" Port:   {}", app_state.new_port)).style(if matches!(app_state.info_mode, InfoMode::AddServerPort | InfoMode::UpdateServerPort) { sel } else { Style::default() }),
+                ListItem::new(format!(" Max Ram:{}", app_state.new_ram)).style(if matches!(app_state.info_mode, InfoMode::AddServerRam | InfoMode::UpdateServerRam) { sel } else { Style::default() }),
                 ListItem::new(format!(" CPU:    {}", app_state.new_cpu)).style(if matches!(app_state.info_mode, InfoMode::AddServerCpu | InfoMode::UpdateServerCpu) { sel } else { Style::default() }),
             ];
             f.render_widget(List::new(items).block(Block::default().borders(Borders::ALL).title(info_title).border_style(info_style)), top_chunks[1]);
@@ -108,11 +108,11 @@ pub fn draw_main_layout(
     let logs: Vec<ListItem> = app_state.logs.iter().rev()
         .map(|l| {
             let s = if l.contains("ERROR") { Style::default().fg(Color::Red) }
-                    else if l.contains("STARTING") || l.contains("STOPPING") { Style::default().fg(Color::Cyan) }
+                    else if l.contains("Starting") || l.contains("Stopping") { Style::default().fg(Color::Cyan) }
                     else { Style::default() };
             ListItem::new(l.as_str()).style(s)
         }).collect();
-    f.render_widget(List::new(logs).block(Block::default().borders(Borders::ALL).title(" LOGY ")), chunks[1]);
+    f.render_widget(List::new(logs).block(Block::default().borders(Borders::ALL).title(" LOGS ")), chunks[1]);
     
     //NÁPOVEDA
     let help_menu = Paragraph::new(" q: Exit | Tab: Switch Panel ")

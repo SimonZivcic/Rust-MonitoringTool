@@ -78,40 +78,106 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             let port: i32 = port_s.trim().parse().unwrap_or(0);
             
             add_server(&mut conn, name.trim(), ram, port, cpu.trim());
-            println!("Server {} bol pridaný.", name.trim());
+            println!("Server '{}' bol pridaný.", name.trim());
         }
         Commands::RunServer => {
-            println!("Zadaj ID servera na prepnutie ON/OFF: ");
-            let mut id_s = String::new(); io::stdin().read_line(&mut id_s)?;
-            if let Ok(sid) = id_s.trim().parse::<i32>() {
-                update_status(&mut conn, sid, "ON");
-                println!("Server {} bol zapnutý (v termináli simulujeme len ON).", sid);
+            print!("Zadaj NÁZOV servera na zapnutie: ");
+            io::stdout().flush()?;
+            let mut target_name = String::new();
+            io::stdin().read_line(&mut target_name)?;
+            let target_name = target_name.trim();
+
+            use Monitor_Lib::schema::servers::dsl::*;
+            let found_server = servers.filter(name.eq(target_name)).first::<Server>(&mut conn).optional()?;
+
+            if let Some(s) = found_server {
+                update_status(&mut conn, s.id, "ON");
+                println!("Server '{}' (ID: {}) bol zapnutý.", target_name, s.id);
+            } else {
+                println!("Chyba: Server s názvom '{}' neexistuje.", target_name);
             }
         }
         Commands::RemoveServer => {
-            println!("Zadaj ID servera na odstránenie: ");
-            let mut id_s = String::new(); io::stdin().read_line(&mut id_s)?;
-            if let Ok(sid) = id_s.trim().parse::<i32>() {
-                remove_server(&mut conn, sid).ok();
-                println!("Server {} odstránený.", sid);
+            print!("Zadaj NÁZOV servera na odstránenie: ");
+            io::stdout().flush()?;
+            let mut target_name = String::new();
+            io::stdin().read_line(&mut target_name)?;
+            let target_name = target_name.trim();
+
+            use Monitor_Lib::schema::servers::dsl::*;
+            let found_server = servers.filter(name.eq(target_name)).first::<Server>(&mut conn).optional()?;
+
+            if let Some(s) = found_server {
+                remove_server(&mut conn, s.id).ok();
+                println!("Server '{}' (ID: {}) bol odstránený.", target_name, s.id);
+            } else {
+                println!("Chyba: Server s názvom '{}' neexistuje.", target_name);
             }
         }
         Commands::ListServer => {
-            let servers = get_all_servers(&mut conn).unwrap();
-            println!("{:-<50}", "");
+            let servers_list = get_all_servers(&mut conn).unwrap();
+            println!("{:-<60}", "");
             println!("{:<5} | {:<10} | {:<20} | {:<5}", "ID", "STAV", "NÁZOV", "PORT");
-            println!("{:-<50}", "");
-            for s in servers {
+            println!("{:-<60}", "");
+            for s in servers_list {
                 println!("{:<5} | {:<10} | {:<20} | {:<5}", s.id, s.status, s.name, s.port);
             }
         }
         Commands::UpdateServer => {
-            println!("Zadaj ID servera na úpravu: ");
-            let mut id_s = String::new(); io::stdin().read_line(&mut id_s)?;
-            if let Ok(sid) = id_s.trim().parse::<i32>() {
-                print!("Nový názov: "); io::stdout().flush()?;
-                let mut name = String::new(); io::stdin().read_line(&mut name)?;
-                println!("Update cez CLI nie je plne implementovaný pre všetky polia, použi GUI.");
+            print!("Zadaj NÁZOV servera na úpravu: ");
+            io::stdout().flush()?;
+            let mut target_name = String::new();
+            io::stdin().read_line(&mut target_name)?;
+            let target_name = target_name.trim();
+
+            use Monitor_Lib::schema::servers::dsl::*;
+            let found_server = servers.filter(name.eq(target_name)).first::<Server>(&mut conn).optional()?;
+
+            if let Some(s) = found_server {
+                println!("--- ÚPRAVA SERVERA (ID: {}, Aktuálne meno: {}) ---", s.id, s.name);
+                println!("(Pre zachovanie pôvodnej hodnoty stlačte ENTER)");
+
+                // 1. NOVÝ NÁZOV
+                print!("Nový názov [{}]: ", s.name);
+                io::stdout().flush()?;
+                let mut n_name = String::new();
+                io::stdin().read_line(&mut n_name)?;
+                let final_name = if n_name.trim().is_empty() { s.name } else { n_name.trim().to_string() };
+
+                // 2. NOVÝ PORT
+                print!("Nový port [{}]: ", s.port);
+                io::stdout().flush()?;
+                let mut n_port = String::new();
+                io::stdin().read_line(&mut n_port)?;
+                let final_port = n_port.trim().parse::<i32>().unwrap_or(s.port);
+
+                // 3. NOVÁ RAM
+                print!("Nová RAM v GB [{:.1}]: ", s.max_ram);
+                io::stdout().flush()?;
+                let mut n_ram = String::new();
+                io::stdin().read_line(&mut n_ram)?;
+                let final_ram = n_ram.trim().parse::<f32>().unwrap_or(s.max_ram);
+
+                // 4. NOVÉ CPU
+                print!("Nový CPU model [{}]: ", s.cpu_model);
+                io::stdout().flush()?;
+                let mut n_cpu = String::new();
+                io::stdin().read_line(&mut n_cpu)?;
+                let final_cpu = if n_cpu.trim().is_empty() { s.cpu_model } else { n_cpu.trim().to_string() };
+
+                // ZÁPIS DO DB
+                diesel::update(servers.filter(id.eq(s.id)))
+                    .set((
+                        name.eq(final_name),
+                        port.eq(final_port),
+                        max_ram.eq(final_ram),
+                        cpu_model.eq(final_cpu)
+                    ))
+                    .execute(&mut conn)?;
+
+                println!("Server bol úspešne aktualizovaný.");
+            } else {
+                println!("Chyba: Server s názvom '{}' neexistuje.", target_name);
             }
         }
     }
@@ -341,16 +407,16 @@ async fn run_ratatui_loop(conn: &mut Monitor_Lib::db::SqliteConnection) -> Resul
                                 if let Some(idx) = state.selected() {
                                     if let Some((s, _, _, _)) = display_data.get(idx) {
                                         if s.status == "/" {
-                                            app_state.logs.push(format!("[{}] ERROR: Server nie je aktivovaný! [A]", Utc::now().format("%H:%M:%S")));
+                                            app_state.logs.push(format!("[{}] ERROR: Server nie je aktivovaný!", Utc::now().format("%H:%M:%S")));
                                         } else if s.status == "ON" || s.status == "OFF" {
                                             let sid = s.id;
                                             let sname = s.name.clone();
                                             let is_turning_on = s.status == "OFF";
                                             
-                                            let start_msg = if is_turning_on { "STARTING" } else { "STOPPING" };
+                                            let start_msg = if is_turning_on { "Starting" } else { "Stopping" };
                                             app_state.logs.push(format!("[{}] {}: {}", Utc::now().format("%H:%M:%S"), sname, start_msg));
 
-                                            let (temp, final_s, final_log) = if is_turning_on { ("STARTING", "ON", "STARTED") } else { ("STOPPING", "OFF", "STOPPED") };
+                                            let (temp, final_s, final_log) = if is_turning_on { ("Starting", "ON", "Started") } else { ("Stopping", "OFF", "Stopped") };
                                             update_status(conn, sid, temp);
                                             
                                             let tx_clone = tx.clone();
