@@ -1,3 +1,5 @@
+//matematika za generovanim metrik
+
 use rand::Rng;
 use crate::models::Server;
 use std::time::{SystemTime, UNIX_EPOCH};

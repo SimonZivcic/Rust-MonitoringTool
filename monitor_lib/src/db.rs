@@ -1,3 +1,5 @@
+//praca z databazou
+
 use diesel::prelude::*;
 pub use diesel::sqlite::SqliteConnection;
 use crate::models::Server;

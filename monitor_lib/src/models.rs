@@ -1,3 +1,5 @@
+//definicia datovej struktury
+
 use diesel::prelude::*;
 use serde::{Serialize, Deserialize};
 

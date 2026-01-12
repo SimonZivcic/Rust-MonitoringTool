@@ -1,3 +1,6 @@
+//definicia struktury
+
+//tabulka zakladnych informacii
 diesel::table! {
     servers (id) {
         id -> Integer,
@@ -9,6 +12,7 @@ diesel::table! {
     }
 }
 
+//tabulka z casovymi zaznammi a vykone
 diesel::table! {
     history (id) {
         id -> Integer,
