@@ -56,7 +56,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut conn = establish_connection();
     diesel::sql_query("PRAGMA journal_mode = WAL;").execute(&mut conn).ok();
 
-    // SPRACOVANIE ARGUMENTOV
+    // Spracovanie Commandov
     let cli = Cli::parse();
 
     match cli.command {
@@ -64,7 +64,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             run_ratatui_loop(&mut conn).await?;
         }
         Commands::AddServer => {
-            println!("--- PRIDANIE SERVERA ---");
+            println!("PRIDANIE SERVERA");
             print!("Názov: "); io::stdout().flush()?;
             let mut name = String::new(); io::stdin().read_line(&mut name)?;
             print!("RAM (GB): "); io::stdout().flush()?;
@@ -134,38 +134,33 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             let found_server = servers.filter(name.eq(target_name)).first::<Server>(&mut conn).optional()?;
 
             if let Some(s) = found_server {
-                println!("--- ÚPRAVA SERVERA (ID: {}, Aktuálne meno: {}) ---", s.id, s.name);
+                println!("ÚPRAVA SERVERA (ID: {}, Aktuálne meno: {})", s.id, s.name);
                 println!("(Pre zachovanie pôvodnej hodnoty stlačte ENTER)");
 
-                // 1. NOVÝ NÁZOV
                 print!("Nový názov [{}]: ", s.name);
                 io::stdout().flush()?;
                 let mut n_name = String::new();
                 io::stdin().read_line(&mut n_name)?;
                 let final_name = if n_name.trim().is_empty() { s.name } else { n_name.trim().to_string() };
 
-                // 2. NOVÝ PORT
                 print!("Nový port [{}]: ", s.port);
                 io::stdout().flush()?;
                 let mut n_port = String::new();
                 io::stdin().read_line(&mut n_port)?;
                 let final_port = n_port.trim().parse::<i32>().unwrap_or(s.port);
 
-                // 3. NOVÁ RAM
                 print!("Nová RAM v GB [{:.1}]: ", s.max_ram);
                 io::stdout().flush()?;
                 let mut n_ram = String::new();
                 io::stdin().read_line(&mut n_ram)?;
                 let final_ram = n_ram.trim().parse::<f32>().unwrap_or(s.max_ram);
 
-                // 4. NOVÉ CPU
                 print!("Nový CPU model [{}]: ", s.cpu_model);
                 io::stdout().flush()?;
                 let mut n_cpu = String::new();
                 io::stdin().read_line(&mut n_cpu)?;
                 let final_cpu = if n_cpu.trim().is_empty() { s.cpu_model } else { n_cpu.trim().to_string() };
 
-                // ZÁPIS DO DB
                 diesel::update(servers.filter(id.eq(s.id)))
                     .set((
                         name.eq(final_name),
@@ -205,7 +200,7 @@ async fn run_ratatui_loop(conn: &mut Monitor_Lib::db::SqliteConnection) -> Resul
         update_id: None,
     };
 
-    //PREPNUTIE STAVOV PRI ŠTARTE
+    //Prepnutie stavov pri starte
     let startup_servers = get_all_servers(conn).unwrap();
     for s in startup_servers {
         if s.status == "STARTING" {
